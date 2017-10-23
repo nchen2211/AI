@@ -1,0 +1,6 @@
+poisonous,capshape,capsurface,capcolor
+0,x,f,e
+0,b,y,w
+1,f,y,y
+1,f,s,b 
+0,f,y,e
