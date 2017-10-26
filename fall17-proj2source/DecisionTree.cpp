@@ -3,83 +3,72 @@
 #include <sstream>
 #include <algorithm>
 #include <math.h>
+#include <cfloat>
 
-DecisionTree::DecisionTree() {}
-
-void DecisionTree::BuildTree(std::string filename) {
-	ParseFile(filename);
-
-	int depth = 2;
-	Node* root = GenerateRoot();
-	std::cout << "root attr: " << root->mNodeDescription;
-
-	Node* parent = root;
-	std::unordered_map<char, Node*>::iterator it = parent->mChildrenMap.begin();
-	for (it; it != parent->mChildrenMap.end(); it++) {
-
-		std::cout << "\negde: " << it->first << " child node attr: " << it->second->mNodeDescription;
-	}
-	// while (depth >= 0) {
-	// 	for (it; it != parent->mChildrenMap.end(); it++) {
-	// 		parent = 
-	// 		GenerateSuccessor(parent, )
-	// 		// std::cout << "\negde: " << it->first << " child node attr: " << it->second->mNodeDescription;
-	// 	}
-	// 	--depth;
-	// }
-	
+DecisionTree::DecisionTree(int depth) {
+	mMaxDepth = depth;
 }
 
-void DecisionTree::ParseFile(std::string filename){
+void DecisionTree::StartTree(std::string filename) {
+	std::vector<Example> allDatasets = ParseFile(filename);
+	AssignSets(allDatasets, 0.8);
+	Node* currNode = new Node();
+	mRoot = BuildTree(currNode, mTrainingSet, mTrainingSet, mTreeAttributes);
+}
+
+std::vector<Example> DecisionTree::ParseFile(std::string filename){
 	
 	std::ifstream inFile;
 	inFile.open(filename);
 	std::string line;
 
-	// std::vector<std::pair<char, std::vector<char> > > allDatasets; // temporarily store all datasets
 	std::vector<Example> allDatasets;
 	int exampleIndex = 0;
 	if (inFile.is_open()) {
 		while (std::getline(inFile, line)) {
 			std::stringstream ss(line);
-
-			if (mAttributes.empty()) { // storing attributes
-
+	
+			// storing attributes
+			if (mTreeAttributes.empty()){
 				std::string attr;
 				while (std::getline(ss, attr,',')) {
-					// mAttributes.emplace_back(attr);
-					Attribute a;
+					TreeAttribute a;
 					a.mDescription = attr;
 					a.mIsExpanded = false;
-					mAttributes.emplace_back(a);
+					mTreeAttributes.emplace_back(a);
 				}
-
-				mAttributes.erase(mAttributes.begin()); // pop the first element since it's the classification
-			} else { // storing datasets
+				// pop the first element since it's the classification
+				mTreeAttributes.erase(mTreeAttributes.begin());
+			} else { // storing datasets and attributes labels
 				std::string st;
-				char tempClass;
+				char tempClassification;
 				std::vector<char> tempV;
 				int attrIndex = 0;
 
 				while (std::getline(ss, st,',')) {
-					if (st == "0" || st == "1")  // if classification
-						tempClass = st[0];
-					else {// if attribute values
-						tempV.emplace_back(st[0]);
+					// if classification
+					if (st == "0" || st == "1")  
+						tempClassification = st[0];
+					// if attribute labels
+					else {
+						tempV.emplace_back(st[0]); // temporarily store labels for each example
 
-						// if attr value hasn't exists yet
-						std::unordered_map<char, std::vector<Example>>::iterator iter = mAttributes[attrIndex].mValues.find(st[0]);
-						if (iter == mAttributes[attrIndex].mValues.end()) {
-							// store attr values for each attr
-							mAttributes[attrIndex].mValues[st[0]];
+						// adding labels to each attribute
+						if (mTreeAttributes[attrIndex].mAttributeLabels.empty()) {
+							mTreeAttributes[attrIndex].mAttributeLabels.emplace_back(st[0]);
+						}
+						else {
+							std::vector<char>::iterator it = find(mTreeAttributes[attrIndex].mAttributeLabels.begin(), mTreeAttributes[attrIndex].mAttributeLabels.end(),st[0]);
+							if (it == mTreeAttributes[attrIndex].mAttributeLabels.end()) 
+								mTreeAttributes[attrIndex].mAttributeLabels.emplace_back(st[0]);
 						}
 						++attrIndex;
 					}
 				}
-				
+		
 				// create Example struct obj
 				Example s;
-				s.mClassification = tempClass;
+				s.mClassification = tempClassification;
 				s.mAttrValues = tempV;
 				s.mExampleIndex = exampleIndex;
 
@@ -91,15 +80,15 @@ void DecisionTree::ParseFile(std::string filename){
 	}
 	inFile.close();
 
-	// for (int i = 0; i < mAttributes.size(); ++i) {
-	// 	std::cout << "attr: " << mAttributes[i].mDescription << " values: " ;
-	// 	for (std::unordered_map<char, std::vector<Example>>::iterator it = mAttributes[i].mValues.begin(); it != mAttributes[i].mValues.end(); it++) {
-	// 		std::cout << it->first << ",";
+	// for (int i = 0; i < mTreeAttributes.size(); ++i) {
+	// 	std::cout << "attr: " << mTreeAttributes[i].mDescription << " values: " ;
+	// 	for (int j =0; j < mTreeAttributes[i].mAttributeLabels.size(); ++j) {
+	// 		std::cout << mTreeAttributes[i].mAttributeLabels[j];
 	// 	}
 	// 	std::cout << std::endl;
 	// }
 
-
+	// int x; std::cin>>x;
 	// for (int i = 0; i < allDatasets.size(); ++i) {
 	// 	std::cout << "E: " << allDatasets[i].mExampleIndex << "classification " << allDatasets[i].mClassification << " values: " ;
 	// 	for (int j = 0; j < allDatasets[i].mAttrValues.size(); ++j) 
@@ -107,24 +96,54 @@ void DecisionTree::ParseFile(std::string filename){
 	// 	std::cout << std::endl;
 	// }
 
-	// shuffle datasets
-	std::random_shuffle(allDatasets.begin(), allDatasets.end());
-	// assign to training, validation, and test
-	AssignSets(allDatasets);
-	allDatasets.clear();
+	return allDatasets;
 }
 
-void DecisionTree::AssignSets(std::vector<Example>& allDatasets) {
+void DecisionTree::AssignSets(std::vector<Example>& allDatasets, double percentage) {
 
-	int allSize = allDatasets.size();
-	int size = 0.6 * allSize; // assign 60% of data to training set
-
-	for (int i=0; i<size; ++i) {
-		mTrainingSet.emplace_back(allDatasets[i]);
-		mTrainingMap[allDatasets[i].mExampleIndex] = allDatasets[i];
-	}
+	// shuffle datasets
+	// std::random_shuffle(allDatasets.begin(), allDatasets.end());
+	// get the size of n% data
+	int size = percentage * allDatasets.size(); 
 	
-	allDatasets.erase(allDatasets.begin(), allDatasets.begin() + size);	
+	// store n % data to training set
+	for (int i=0; i<size-1; ++i) 
+		mTrainingSet.emplace_back(allDatasets[i]);
+
+	if (mMaxDepth != -1) { // bounded tree
+		
+		int limit = 0.2 * allDatasets.size() + 1;
+
+		// assign validation set
+		int validStartIndex = size;
+		for (int i=0; i<limit; ++i)  
+			mValidationSet.emplace_back(allDatasets[size + i]);
+
+		// assign test set
+		int testStartIndex = limit;
+		for (int i=0; i< limit; ++i)  
+			mTestSet.emplace_back(allDatasets[testStartIndex + i]);
+	} else { // unbounded tree
+		// store 100 - n% of data to test set
+		int limit = 0.2 * allDatasets.size();
+		for (int i=0; i< limit; ++i)  
+			mTestSet.emplace_back(allDatasets[size +i]);
+	}
+
+	std::cout << "training: " << mTrainingSet.size();
+	std::cout << "test: " << mTestSet.size();
+
+	// mTrainingSet = allDatasets;
+
+	// for (int i=0; i<size; ++i) {
+	// 	mTrainingSet.emplace_back(allDatasets[i]);
+	// 	mTrainingMap[allDatasets[i].mExampleIndex] = allDatasets[i];
+	// }
+	
+	// allDatasets.erase(allDatasets.begin(), allDatasets.begin() + size);	
+
+	// for (int i=0; i<allDatasets.size(); ++i)  // assign 100 - n% of data to test set
+	// 	mTestMap[allDatasets[i].mExampleIndex] = allDatasets[i];
 
 	// std::cout << "\nTraining data set\n";
 	// for (int i = 0; i <mTrainingSet.size(); ++i)
@@ -137,11 +156,11 @@ void DecisionTree::AssignSets(std::vector<Example>& allDatasets) {
 	// }
 	// std::cout << "size: " << mTrainingSet.size();
 
-	size = 0.2 * allSize; // assign 20% of data to validation test
-	for (int i=0; i<size; ++i) 
-		mValidationMap[allDatasets[i].mExampleIndex] = allDatasets[i];
+	// size = 0.2 * allSize; // assign 20% of data to validation test
+	// for (int i=0; i<size; ++i) 
+	// 	mValidationMap[allDatasets[i].mExampleIndex] = allDatasets[i];
 	
-	allDatasets.erase(allDatasets.begin(), allDatasets.begin() + size);
+	// allDatasets.erase(allDatasets.begin(), allDatasets.begin() + size);
 
 	// std::cout << "\nValidation data set\n";
 	// for (int i = 0; i <mValidationSet.size(); ++i)
@@ -154,8 +173,6 @@ void DecisionTree::AssignSets(std::vector<Example>& allDatasets) {
 	// }
 	// std::cout << "size: " << mValidationSet.size();
 
-	for (int i=0; i<allDatasets.size(); ++i)  // assign 20% of data to test set
-		mTestMap[allDatasets[i].mExampleIndex] = allDatasets[i];
 
 	// std::cout << "\nTest data set\n";
 	// for (int i = 0; i <mTestSet.size(); ++i)
@@ -167,227 +184,323 @@ void DecisionTree::AssignSets(std::vector<Example>& allDatasets) {
 	// 	std::cout << std::endl;
 	// }
 	// std::cout << "size: " << mTestSet.size() << std::endl << std::endl;
+
+	allDatasets.clear();
 }
 
-double CalculateEntropy(double pRatio) {
-	// std::cout << "\npRatio: " << pRatio;
-	double entropy = -1 * ( (pRatio * log2 (pRatio)) + ((1 - pRatio) * log2 (1 - pRatio)) );
-	
-	if (entropy > 0)
-		return entropy;
-	
-	return 0;
-}
-
-void ResetAttribute(std::vector<Attribute>& mAttributes) {
-	for (auto& attr : mAttributes) {
-		std::unordered_map<char, std::vector<Example>>::iterator it = attr.mValues.begin();
-		for (it; it!=attr.mValues.end(); it++) { // reset all the example for each attribute
-			it->second.clear();
+double GetSameValue(const std::pair<char, std::vector<Example> >& labelExample, char classification) {
+	double value = 0.0;
+	for (auto example : labelExample.second) {
+		if (example.mClassification == classification) {
+			++value;
 		}
 	}
+	return value;
 }
 
-void DecisionTree::CalculateGain(std::vector<Example>& exampleSet) {
+double CalculateEntropy(double pRatio, double nRatio) {
 
-	// std::cout << "~~~~~~~~~~~~~~ in calculate gain ~~~~~~~~~~~~~\n";
-	// std::cout << "total example " << exampleSet.size() << std::endl;
-	ResetAttribute(mAttributes);
+	double posEntropy = 0.0;
+	double negEntropy = 0.0;
+	if (pRatio == 0 || pRatio == 1)
+		posEntropy = 0.0;
+	else
+		posEntropy = pRatio * (log(pRatio)/log(2));
 
-	// grouping examples based on attributes of the example set
-	for (auto example : exampleSet) {
-		int attrIndex = 0;
+	if (nRatio == 0 || nRatio == 1)
+		negEntropy = 0.0;
+	else
+		negEntropy = nRatio * (log(nRatio)/log(2));
 
-		for (auto value : example.mAttrValues) {
-			int count = 0;
-			if (! mAttributes[attrIndex].mIsExpanded) { 
-				// find attr value of the current attribute
-				std::unordered_map<char, std::vector<Example>>::iterator it = mAttributes[attrIndex].mValues.find(value);
-				it->second.emplace_back(example);
+
+	return posEntropy + negEntropy;
+}
+
+// return a pair of attribute and the attribute labels
+std::pair<std::string, std::vector<char> > DecisionTree::GetAttributeToSplit(std::vector<Example>& exampleSet, std::vector<TreeAttribute> currTreeAttributes) {
+
+	// ################  get number of example of each attribute labels ##################
+	unsigned int eIndex = 0; // index for each column
+	std::vector<std::vector<std::pair<char, int> > > allAttrNumExamples; // store pair vector of examples of each attr label
+	std::vector<std::vector<std::pair<char, std::vector<Example> > > > allAttrEx; // store pair vector of all example objects contain in each attribute label
+	
+	std::vector<TreeAttribute> newAttributes;
+	int index = 0;
+	for (auto attr : mTreeAttributes) {
+		// std::cout << "!! attr: " << attr.mDescription << std::endl;
+		if (! currTreeAttributes[index].mIsExpanded) {//(! attr.mIsExpanded) {
+			newAttributes.emplace_back(attr);
+			std::vector<std::pair<char, int> > numLabelExamples;
+			std::vector<std::pair<char, std::vector<Example> > > labelExamples;
+
+			for (auto label : attr.mAttributeLabels) {// store the label(s) for this attribute
+				numLabelExamples.emplace_back(std::make_pair(label, 0));
+				std::vector<Example> e;
+				labelExamples.emplace_back(std::make_pair(label, e));
+				// std::cout << "!! label: " << numLabelExamples.back().first << std::endl;
 			}
-			++attrIndex;
-		}	
-	}
-
-	std::cout << "\n\n EXAMPLES OF EACH ATTRIBUTES\n";
-	for (auto attr : mAttributes) {
-		std::cout << attr.mDescription << std::endl;
-		std::unordered_map<char, std::vector<Example>>::iterator it = attr.mValues.begin();
-		for (it; it != attr.mValues.end(); it++) {
-			if (! attr.mIsExpanded) {
-				std::cout << it->first << " (";
-				// for (auto example : it->second) {
-				// 	std::cout << "E" << example.mExampleIndex << ", ";
-				// }
-				std::cout << it->second.size();
-			}
-			std::cout << ")" << std::endl;
-		}
-	}
-		
-	// calculate gain for each attribute
-	double totalExample = static_cast<double>(exampleSet.size()); // total example 
-	for (auto &attr : mAttributes) {
-		std::unordered_map<char, std::vector<Example>>::iterator it = attr.mValues.begin();
-		
-		if (! attr.mIsExpanded) {
-			// std::cout << "\n\nCalculating gain for attribute: " << attr.mDescription;
-			// std::cout << "";
-			double remainder = 0.0;
-			for (it; it != attr.mValues.end(); ++it) { // for each attr value in the map
-
-				double attrExample =  static_cast<double>(it->second.size()); // store number of example for this attr value
-				double countTrue = 0.0;
-
-				// std::cout << "\n\nvalue: " << it->first;
-				// std::cout << "\nattrExample: " << attrExample;
-
-				for (auto elem : it->second) { // count true classification for this attr value
-					if (elem.mClassification == '1') 
-						++countTrue;
-				}
-				// std::cout << "\ncount true: " << countTrue;
-				if (attrExample > 0) {
-					double pRatio = (countTrue / attrExample);
-					double entropy = CalculateEntropy(pRatio);
-					// std::cout << "\ncountTrue: " << countTrue;
-					// std::cout << "\nEntropy: " << entropy;
-					// std::cout << "\nold remainder: " << remainder;
-					remainder += ( (attrExample / totalExample) * entropy);
-					// std::cout << "\nremainder: " << remainder;
-				}
-			}	
-		// store the gain of this attribute
-		attr.mGain = 1.0 - remainder;
-		// std::cout << "\ngain = " << attr.mDescription << " = " << attr.mGain;
-		}
-	}
-	// std::cout << "\n####################################\n";
-}
-
-int GetMaxGainIndex(std::vector<Attribute>& attrVector) {
-	double maxGain = 0.0; int maxIndex = 0;
-	for (int i =0; i<attrVector.size(); ++i) {
-		// skip attribute that is already expanded
-		if (! attrVector[i].mIsExpanded) {
-			if (attrVector[i].mGain > maxGain) {
-				maxGain = attrVector[i].mGain;
-				maxIndex = i;
-			}
-		}
-	}
-	std::cout << "MAX GAIN = " << maxGain << std::endl;
-	return maxIndex;
-}
-
-// get root
-Node* DecisionTree::GenerateRoot() {
-
-	// calculate gain for each attribute
-	CalculateGain(mTrainingSet);
-	// get attr index where it has the max gain
-	int maxIndex = GetMaxGainIndex(mAttributes);
-	std::cout << "Selected attribute: " << mAttributes[maxIndex].mDescription << std::endl;
-	Node *root = new Node(mAttributes[maxIndex].mDescription);
-	// set explored to true
-	mAttributes[maxIndex].mIsExpanded = true;
-	root->mIsLeaf = false;
-	root->parent = NULL;
-
-	GenerateSuccessor(root, mAttributes[maxIndex]);
-
-	return root;
-}
-
-Node* DecisionTree::GenerateNode(std::vector<Example>& exampleSet, Node* parentNode, bool isLeaf) {
-
-	Node *node;
-	if (! isLeaf) { // split node
-		// calculate gain for each attribute than hasn't been expanded
-		CalculateGain(exampleSet);
-		// get attr index where it has the max gain
-		int maxIndex = GetMaxGainIndex(mAttributes);
-		std::cout << "Selected attribute: " << mAttributes[maxIndex].mDescription << std::endl;
-		// set explored to true
-		mAttributes[maxIndex].mIsExpanded = true;
-		// create Node obj 
-		node = new Node(mAttributes[maxIndex].mDescription);
-		node->mIsLeaf = false;
-		
-	} else { // leaf node
-		node = new Node(std::string(1, exampleSet[0].mClassification));
-		// set is leaf to false
-		node->mIsLeaf = true;
-	}
-	
-	// set its parent to parentNode
-	node->parent = parentNode;
-	
-	// if (parentNode == NULL) {
-	// 	std::cout << "\n\n Attribute *" << mAttributes[maxIndex].mDescription << "* is the root\n";
-	// }
-	// std::cout << "\n\n CHILDREN of Attribute *" << mAttributes[maxIndex].mDescription << "*\n";
-	// std::unordered_map<char, std::vector<Example>>::iterator it = mAttributes[maxIndex].mValues.begin();
-	// for (it; it != mAttributes[maxIndex].mValues.end(); it++) {
-	// 	std::cout << "value: " << it->first << " (";
-	// 	for (auto example : it->second) {
-	// 		std::cout << "E" << example.mExampleIndex << " ";
-	// 	}
-	// 	std::cout << ")" << std::endl;
-	// }
-	return node;
-}
-
-// recursively generate successors
-void DecisionTree::GenerateSuccessor(Node* parentNode, Attribute attr) {
-
-	std::unordered_map<char, std::vector<Example>>::iterator it = attr.mValues.begin();
-	for (it; it != attr.mValues.end(); it++) { // for each attr value
-		
-		std::cout << "PROCESSING VALUE " << it->first << std::endl;
-		int x;
-	
-		// ######################### if example is empty #############################
-		if (it->second.empty()) {
-			std::cout << "\nempty example\n";
-			std::cin >> x;
-			// return plurality-value(parent_examples)
-		}
-		// ######################### if attribute is empty ###########################
-		else if (mAttributes.empty()) {
-			std::cout << "\nempty attribute";
-			std::cin >> x;
-		}
-		// ################# if num of example for this attr value is > 1 ###########
-		else if (it->second.size() >= 1) { 
 			
-			int trueClass = 0;
-			Node* childNode = NULL;
-			for (int i=0; i<it->second.size(); ++i) { // for each example in this attr value
+			int j = 0;
+			for (auto& label : numLabelExamples) { // count # of example for each label attr
+				// go through each example
+				// std::cout << "!! processing label " << label.first << std::endl;
+		
+				for (int i=0; i<exampleSet.size(); ++i) {	
+					// std::cout << "comparing example " << exampleSet[i].mAttrValues[eIndex] << " with label value " << label.first << std::endl;
+					if (label.first == exampleSet[i].mAttrValues[eIndex] ) {
+						// std::cout << "!! E" << eIndex;
+						++label.second;
+						labelExamples[j].second.emplace_back(exampleSet[i]);
+						// std::cout << "SAME " << label.first << " increment value to " << label.second << std::endl;
+					}
 
-				if (it->second[i].mClassification == '1')
-					++trueClass;
+				}
+				// std::cout << "!! num example: " << labelExamples[j].second.size() << std::endl;
+				++j;
 			}
 
-			// ############# if all of the classification value is the same ############
-			if (trueClass == it->second.size() || trueClass == 0) {
-				std::cout << "\nGenerating leaf node for edge value: " << it->first << std::endl;
-				std::cin >> x;	
-				// generate leaf node
-				childNode = GenerateNode(it->second, parentNode, true);
-				std::cout << "leaf node for edge " << it->first << " is " << childNode->mNodeDescription << std::endl;
+			allAttrNumExamples.emplace_back(numLabelExamples);
+			allAttrEx.emplace_back(labelExamples);
+		}
+		// else {
+		// 	std::cout << "\n..MARKED " << attr.mDescription << std::endl;
+		// 	std::cin >> x;
+		// }
+		// if (attr.mDescription == "gillattachment")
+		// 	std::cin >> x;
+		++index;
+		++eIndex;
+	}
+	// ###################################################################################
+	
+
+	// ########################## calculate gain for each attribute #####################
+	std::vector<double> allAttrGain;
+	int i = 0;
+	for (auto attrExamples : allAttrEx) {
+		
+		std::cout << "new current attribute: " << newAttributes[i].mDescription << std::endl;
+		++i;
+		double currAttrTotalExample = 0.0;
+		double attrEntropy = 0.0;
+		for (auto labelExamples : attrExamples) {
+			currAttrTotalExample += static_cast<double>(labelExamples.second.size()); // total example for this attribute
+		}
+
+		double entropy = 0.0;
+		double remainder = 0.0;
+		double informationGain = 0.0;
+
+
+		double countTrue = 0.0;
+		double countFalse = 0.0;
+		double pRatio = 0.0;
+		double nRatio = 0.0;
+		// 	double entropy = 0.0;
+		double featureRatio = 0.0;
+
+		
+		for (auto labelExamples : attrExamples) {
+			
+			double currLabelTotalExample = static_cast<double>(labelExamples.second.size());
+		
+			// std::cout << "label " << labelExamples.first << std::endl;
+			if (currLabelTotalExample > 0) {
+				countTrue = GetSameValue(labelExamples,'1');
+				countFalse = GetSameValue(labelExamples, '0');
+				pRatio = countTrue / currLabelTotalExample;
+				nRatio = countFalse / currLabelTotalExample;
+				entropy = CalculateEntropy(pRatio, nRatio);
 				
-			}
-			// ############# if all the classification value is not the same ###########	
-			else { 
-				std::cout << "\nGenerating child node for edge value: " << it->first << std::endl;
-				std::cout << "size of example " << it->second.size() << std::endl;
-				std::cin >> x;	
-				childNode = GenerateNode(it->second, parentNode, false);
-			}
 
-			// add child node to parent's children map
-			parentNode->mChildrenMap[it->first] = childNode;	
+				featureRatio = currLabelTotalExample / currAttrTotalExample;
+				attrEntropy -= (featureRatio * entropy);
+
+
+
+				// std::cout << "pos " << countTrue << " neg " << countFalse << std::endl;
+				// std::cout << "feature ratio " << featureRatio << std::endl;
+			}
+		}
+		// informationGain = 
+		// allAttrGain.emplace_back(1.0 - remainder);
+		// std::cout << "feature entropy " << attrEntropy << std::endl << std::endl;
+		allAttrGain.emplace_back(attrEntropy);
+	}
+	// ##################################################################################
+
+	// std::cin >> x;
+	// for (auto gain : allAttrGain)
+	// 	std::cout << "gain " << gain <<  std::endl;
+
+	// get max gain index
+	// double maxGain = 0.0; int maxIndex = 0;
+	// for (int i = 0; i < allAttrGain.size(); ++i) {
+	// 	if (allAttrGain[i] > maxGain) {
+	// 		maxGain = allAttrGain[i];
+	// 		maxIndex = i;
+	// 	}
+	// }
+
+	double minGain = DBL_MAX; int minIndex = 0;
+	for (int i = 0; i < allAttrGain.size(); ++i) {
+		if (allAttrGain[i] < minGain) {
+			minGain = allAttrGain[i];
+			minIndex = i;
 		}
 	}
+
+	// std::cout << "\n gain size " << allAttrGain.size() << std::endl;
+	// std::cout << "MAX INDEX " << maxIndex << " gain = " << maxGain <<std::endl;
+	// std::cin >>x;
+	std::pair<std::string, std::vector<char> > attrToSplit;
+	attrToSplit.first = newAttributes[minIndex].mDescription;
+	attrToSplit.second = newAttributes[minIndex].mAttributeLabels;
+
+	return attrToSplit;
+}
+
+// to check if all attributes have been expanded
+bool IsAttributeEmpty(std::vector<TreeAttribute>& mTreeAttributes) {
+	for (auto attr : mTreeAttributes) {
+		if (! attr.mIsExpanded)
+			return false;
+	}
+	return true;
+}
+
+// return true if all classifications are the same
+bool IsSameClassification(std::vector<Example>& exampleSet) {
+	// std::cout << "here" << std::endl;
+	
+	char classification = exampleSet[0].mClassification;
+	for (int i=1; i<exampleSet.size(); ++i) {
+
+		if (classification != exampleSet[i].mClassification) 
+			return false;
+	}
+	return true;
+}
+
+// grouping examples based on splitted attribute label(s)
+std::vector<Example> DecisionTree::PruneDataset(char label, int attrIndex, const std::vector<Example>& exampleSet) {
+	std::vector<Example> prunedExamples;
+
+	// std::cout << "~~~~~~~~~~~~~~~~~~~~~~~ in prunedataset ~~~~~~~~~~~~~~~~~~~~~\n";
+	// std::cout << "attribute: " << mTreeAttributes[attrIndex].mDescription <<  " label: " << label << std::endl;
+	
+	for (int i = 0; i < exampleSet.size(); ++i) {
+		if (exampleSet[i].mAttrValues[attrIndex] == label) {
+			// std::cout << label;
+			prunedExamples.emplace_back(exampleSet[i]);
+		}
+	}
+	return prunedExamples;
+}
+
+char GetPluralityValue(const std::vector<Example>& exampleSet) {
+	int trueValue = 0;
+	int falseValue = 0;
+
+	for (auto example : exampleSet) {
+		if (example.mClassification == '0')
+			++falseValue;
+		else if (example.mClassification == '1')
+			++trueValue;
+	}
+
+	if (trueValue > falseValue)
+		return '1';
+	return '0';
+}
+
+// recursively build decision tree
+Node* DecisionTree::BuildTree(Node* currNode, std::vector<Example>& currExamples, std::vector<Example>& parentExamples, std::vector<TreeAttribute> currTreeAttributes) {
+
+	// if example runs out
+	if (currExamples.size() == 0) {
+		currNode->mIsLeaf = true;
+		currNode->mNodeValue = GetPluralityValue(currExamples);
+		 std::cout << "\n hit example 0 \n";
+		return currNode;
+	}
+
+	// if all attributes runs out
+	if (IsAttributeEmpty(mTreeAttributes)) {
+		currNode->mIsLeaf = true;
+		currNode->mNodeValue = GetPluralityValue(currExamples);
+		std::cout << "\n hit attributes empty \n";
+		return currNode;
+	}
+
+	// if the tree depth reaches max depth for bounded tree only
+	if (currNode->mNodeDepth == mMaxDepth) {
+		currNode->mIsLeaf = true;
+		currNode->mNodeValue = GetPluralityValue(currExamples);
+		 std::cout << "\n hit max depth \n";
+		return currNode;
+	}
+
+	// if all example classifications are the same
+	if (IsSameClassification(currExamples)){ 
+		currNode->mIsLeaf = true;
+		currNode->mNodeValue = currExamples[0].mClassification;
+		std::cout << "\n hit same classification \n";
+		return currNode;
+	} else { // if they are different, split feature
+		
+		std::pair<std::string, std::vector<char> > attrToSplit = GetAttributeToSplit(currExamples, currTreeAttributes);
+		currNode->mNodeAttribute = attrToSplit.first;
+
+		std::cout << "\nattr to split: " << currNode->mNodeAttribute;
+		// std::cin >> x;
+		
+		int attrIndex = 0;
+		// set flag to this attribute as expanded
+		for (int i = 0; i < mTreeAttributes.size(); ++i) {
+			if (currTreeAttributes[i].mDescription == currNode->mNodeAttribute) {
+				currTreeAttributes[i].mIsExpanded = true;
+				attrIndex = i;
+				break;
+			}
+		}  
+
+		// generate successor(s)
+		for (auto attrLabel : attrToSplit.second) {
+
+			// std::cout << "\nlabel " << attrLabel << std::endl;
+			Node* childNode = new Node();
+			childNode->mIsLeaf = false;
+			childNode->mNodeValue = attrLabel;
+			childNode->mNodeDepth = currNode->mNodeDepth + 1;
+			childNode->mNodeParent = currNode;
+
+	
+			// get child's example set
+			std::vector<Example> childExample = PruneDataset(attrLabel, attrIndex, currExamples);
+			
+			std::cout << "\nattr inside for loop " << attrToSplit.first;
+			std::cout << "\nprune on: " << attrLabel << std::endl; 
+			std::cout << "CHILD EXAMPLE " <<childExample.size() << std::endl;
+			// std::cout << "for attr " << attrToSplit.first << " label " << attrLabel << std::endl;
+			
+			// for (auto example : childExample) {
+			// 	// std::cout << "E" << example.mExampleIndex << " ";
+			// 	std::cout << example.mClassification << " ";
+			// 	for (auto value : example.mAttrValues) {
+			// 		std::cout << value << " ";
+			// 	}
+			// 	std::cout << std::endl;
+			// }
+
+			++y;
+			std::cout << "##############   count " << y << "    #################\n";
+			// std::cin >> x;
+
+			// add this attr label to 
+			currNode->mNodeLabels.emplace_back(attrLabel);
+			currNode->mNodeChildren.emplace_back(BuildTree(childNode, childExample, currExamples, currTreeAttributes));
+		}
+	}
+	return currNode;
 }
