@@ -12,44 +12,47 @@ struct Example {
 	int mExampleIndex;
 };
 
-struct Attribute {
-	std::string mDescription; // attribute description
-	std::unordered_map<char, std::vector<Example>> mValues; // map of attr values and examples that fall into its value's category
-	int mTotalExample; // total examples that fall into this attr category. For calculating gain
-	double mGain; // information gain of this attribute
-	bool mIsExpanded; // set to true if it is selected to be a node
+struct TreeAttribute {
+	std::string mDescription;
+	std::vector<char> mAttributeLabels;
+	bool mIsExpanded;
+	int attrIndex;
 };
 
 struct Node {
-	
-	std::string mNodeDescription; // attribute description or 0 or 1
+	std::string mNodeAttribute; // attribute description
+	char mNodeValue; // store 0, 1, or plurality value
 	bool mIsLeaf; // flag of leaf node
-	std::unordered_map<char, Node*> mChildrenMap; // attr value as edge, Node as vertex
-	Node* parent;
-
-	Node (std::string desc) {
-		mNodeDescription = desc;
-	}
+	std::vector<Node*> mNodeChildren;
+	std::vector<char> mNodeLabels;
+	int mNodeDepth = 1;
+	Node* mNodeParent;
 };
 
 class DecisionTree {
 
 private:
-	std::vector<Attribute> mAttributes;
+	std::vector<TreeAttribute> mTreeAttributes;
 	std::vector<Example>mTrainingSet;
-	std::unordered_map<int, Example> mTrainingMap;
-	std::unordered_map<int, Example> mValidationMap;
-	std::unordered_map<int, Example> mTestMap;
+	std::vector<Example>mValidationSet;
+	std::vector<Example>mTestSet;
+	std::unordered_map<std::string, int> mAttributeMap;
+	int mMaxDepth;
+	std::pair<double, double> mAccuracyValues;
+	Node *mRoot;
 
 public:
-	DecisionTree();
-	void ParseFile(std::string filename);
-	void AssignSets(std::vector<Example>& allDatasets);
-	void CalculateGain(std::vector<Example>& exampleSet);
-	void BuildTree(std::string filename);
-	Node* GenerateRoot();
-	Node* GenerateNode(std::vector<Example>& exampleSet, Node* parentNode, bool isLeaf);
-	void GenerateSuccessor(Node* parentNode, Attribute attr);
+	DecisionTree(int depth);
+	~DecisionTree();
+	void StartTree(std::string filename);
+	std::vector<Example> ParseFile(std::string filename);
+	void AssignSets(std::vector<Example>& allDatasets, double percentage);
+	Node* BuildTree(Node* currNode, std::vector<Example>& currExamples, std::vector<Example>& parentExamples, std::vector<TreeAttribute> currTreeAttributes);
+	std::pair<std::string, std::vector<char> > GetAttributeToSplit(std::vector<Example>& exampleSet, std::vector<TreeAttribute> currTreeAttributes);
+	std::vector<Example> PruneDataset(char label, int attrIndex, const std::vector<Example>& exampleSet);
+	char GetClassificationFromTree(Node *treeNode, const Example& currentTestData);
+	double EvaluateAccuracy(Node *treeNode, const std::vector<Example>& dataSet);
+	std::pair<double, double> GetAccuracyValues() const;
 };
 
 #endif
