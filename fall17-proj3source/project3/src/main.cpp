@@ -13,6 +13,14 @@ int main(int argc, char* argv[]) {
     //Read in the data set from the files
     mnist::MNIST_dataset<std::vector, std::vector<uint8_t>, uint8_t> dataset =
     mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>(MNIST_DATA_DIR);
+
+    /*
+    The first two lines of the above code block (which you can use as-is) load the
+    MNIST database, while the third line binarizes the training and test images, so that
+    each pixel value in each image will be either a 0 (representing black) or 1 (representing
+    white). 
+    */
+
     //Binarize the data set (so that pixels have values of either 0 or 1)
     mnist::binarize_dataset(dataset);
     //There are ten possible digits 0-9 (classes)
@@ -25,9 +33,18 @@ int main(int argc, char* argv[]) {
     int width = 28;
     //image height
     int height = 28;
-    // get training images
+    // extract training images from "dataset" vector
+    /*
+    trainImages is a vector of 60,000 vectors of unsigned chars (each of the char is
+    representing a training image). For each i, there is a vector of 784 unsigned char (each
+    represents of the 784 pixel values of training image i)
+    */
     std::vector<std::vector<unsigned char>> trainImages = dataset.training_images;
-    // get training labels
+    // extract training labels from "dataset" vector
+    /*
+    trainLabels is a vector of 60,000 unsigned char (each represents the true digit represented 
+    by trainImages[i]). To use these values, they should be converted to integers using static_cast<int>
+    */
     std::vector<unsigned char> trainLabels = dataset.training_labels;
     // get test images
     std::vector<std::vector<unsigned char>> testImages = dataset.test_images;
