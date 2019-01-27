@@ -6,11 +6,14 @@
 #include <algorithm>
 #include <sstream>
 
-NaiveBayesianNetwork::NaiveBayesianNetwork(unsigned int numLabels, unsigned int numFeatures)
+NaiveBayesianNetwork::NaiveBayesianNetwork(unsigned int possibleDigits, unsigned int numFeatures)
 {
 	std::vector<int> v (784, 0);
 	std::vector<double> vec (784, 0.0);
-	for (int i = 0; i < numLabels; ++i) {
+
+	// Go through 10 possible digits. 
+	// Create and instantiate Digit object for each possible digit then add it to a vector
+	for (int i = 0; i < possibleDigits; ++i) {
 		Digit d;
 		d.mNumImages = 0;
 		d.mProb = 0.0;
@@ -20,45 +23,63 @@ NaiveBayesianNetwork::NaiveBayesianNetwork(unsigned int numLabels, unsigned int 
 
 		mDigitVector.emplace_back(d);
 	}
-	mNumLabels = numLabels;
+	// Store the number of possible digits and the number of pixels in an image
+	mPossibleDigits = possibleDigits;
 	mNumFeatures = numFeatures;
 }
 
+// Setting training images to a vector of vectors
 void NaiveBayesianNetwork::SetTrainImages(const std::vector<std::vector<unsigned char>>& trainImages)
 {
 	mTrainImages = trainImages;
 }
 
+// Set training labels associated with training images to a vector
 void NaiveBayesianNetwork::SetTrainLabels(const std::vector<unsigned char>& trainLabels)
 {
 	mTrainLabels = trainLabels;
 }
 
+// Setting test images to a vector of vectors
 void NaiveBayesianNetwork::SetTestImages(const std::vector<std::vector<unsigned char>>& testImages)
 {
 	mTestImages = testImages;
 }
 
+// Set test labels associated with training images to a vector
 void NaiveBayesianNetwork::SetTestLabels(const std::vector<unsigned char>& testLabels)
 {
 	mTestLabels = testLabels;
 }
 
-// calculate prior prob for each digit
+/*
+This function is to calculate prior probability for each digit
+*/
 void NaiveBayesianNetwork::CalculateClassProb()
 {
 	// Get # of images of each digit c from training labels
 	for (int i = 0; i < mTrainLabels.size(); ++i)
 	{
+		// Increment the number of image associated with each digit. 
+		// Note: each index of mDigitVectors is identical to its element, so mTrainLabels[i] 
+		//       can be utilized as mDigitVector index to increment the number of image
+		// mDigitVector[0] = 0
+		// mDigitVector[1] = 1 ...
+		// mDigitVector[9] = 9
 		++mDigitVector[static_cast<int>(mTrainLabels[i])].mNumImages;
 	}
 
 	// Determine the prior probabilities for each class (digit)
 	double sum = 0.0;
-	for (int i = 0; i < mNumLabels; ++i)
+	for (int i = 0; i < mPossibleDigits; ++i)
 	{
+		// Prior probability for each digit = num of images of digit i / total number of all training image set
 		double prob = static_cast<double>(mDigitVector[i].mNumImages) / static_cast<double>(mTrainImages.size());
+		
+		// Store prior probability of each digit to "mProb" (Digit struct member variable)
 		mDigitVector[i].mProb = prob;
+
+		// Sum is not used anywhere else. It's for testing to make sure that the sum of prior probability = 1
 		sum += prob;
 	}
 }
@@ -66,7 +87,7 @@ void NaiveBayesianNetwork::CalculateClassProb()
 // calculate conditional prob for each pixel in each class (digit)
 void NaiveBayesianNetwork::CalculatePixelProb()
 {
-	for (int digit = 0; digit < mNumLabels; ++digit) // for each digit
+	for (int digit = 0; digit < mPossibleDigits; ++digit) // for each digit
 	{
 		for (int pixel = 0; pixel < mNumFeatures; ++pixel) // for each pixel of this digit
 		{
@@ -92,7 +113,7 @@ void NaiveBayesianNetwork::EvaluateTestImages()
 {
 	std::vector<double> digitProb;
 	// calculate log of each class probability P(C = c)
-	for (int digit = 0; digit < mNumLabels; ++digit) // 
+	for (int digit = 0; digit < mPossibleDigits; ++digit) // 
 	{
 		digitProb.emplace_back(log(mDigitVector[digit].mProb) / log(2));
 	}
@@ -101,7 +122,7 @@ void NaiveBayesianNetwork::EvaluateTestImages()
 	for (int i = 0; i < mTestImages.size(); ++i) // for each test image
 	{
 		std::vector<double> allDigitMatchProb;
-		for(int digit = 0; digit < mNumLabels; ++digit) // go through each digit to sum the prob of this pixel
+		for(int digit = 0; digit < mPossibleDigits; ++digit) // go through each digit to sum the prob of this pixel
 		{
 			double pixelProb = 0.0;
 			double summation = 0.0;
@@ -147,7 +168,7 @@ void NaiveBayesianNetwork::EvaluateTestImages()
 void NaiveBayesianNetwork::VisualEvaluation()
 {
 
-	for (int digit = 0; digit < mNumLabels; ++digit) {
+	for (int digit = 0; digit < mPossibleDigits; ++digit) {
 		std::vector<unsigned char> classFs(mNumFeatures);
 	
 		for (int pixel = 0; pixel < mNumFeatures; pixel++) {

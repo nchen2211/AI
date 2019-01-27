@@ -40,8 +40,8 @@ private:
 	std::vector<std::vector<unsigned char>> mTestImages;
 	std::vector<unsigned char> mTrainLabels;
 	std::vector<unsigned char> mTestLabels;
-	unsigned int mNumLabels;
-	unsigned int mNumFeatures;
+	unsigned int mPossibleDigits; // Store int 10 because there are 0 - 9 possible digits
+	unsigned int mNumFeatures; // Store 784 because there are 28 x 28 num of pixels in an image
 
 	std::vector<Digit> mDigitVector; // store 10 Digit struct in vector
 	std::vector<int> mTestImageMatch; 

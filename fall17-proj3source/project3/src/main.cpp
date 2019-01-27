@@ -12,19 +12,17 @@
 int main(int argc, char* argv[]) {
     //Read in the data set from the files
     mnist::MNIST_dataset<std::vector, std::vector<uint8_t>, uint8_t> dataset =
-    mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>(MNIST_DATA_DIR);
+        mnist::read_dataset<std::vector, std::vector, uint8_t, uint8_t>(MNIST_DATA_DIR);
 
     /*
     The first two lines of the above code block (which you can use as-is) load the
-    MNIST database, while the third line binarizes the training and test images, so that
-    each pixel value in each image will be either a 0 (representing black) or 1 (representing
-    white). 
+    MNIST database
     */
 
     //Binarize the data set (so that pixels have values of either 0 or 1)
     mnist::binarize_dataset(dataset);
     //There are ten possible digits 0-9 (classes)
-    int numLabels = 10;
+    int possibleDigits = 10;
     //There are 784 features (one per pixel in a 28x28 image)
     int numFeatures = 784;
     //Each pixel value can take on the value 0 or 1
@@ -33,6 +31,7 @@ int main(int argc, char* argv[]) {
     int width = 28;
     //image height
     int height = 28;
+    
     // extract training images from "dataset" vector
     /*
     trainImages is a vector of 60,000 vectors of unsigned chars (each of the char is
@@ -51,7 +50,7 @@ int main(int argc, char* argv[]) {
     // get test labels
     std::vector<unsigned char> testLabels = dataset.test_labels;
     
-    NaiveBayesianNetwork bayesianNetwork(numLabels, numFeatures);
+    NaiveBayesianNetwork bayesianNetwork(possibleDigits, numFeatures);
     bayesianNetwork.SetTrainImages(trainImages);
     bayesianNetwork.SetTrainLabels(trainLabels);
     bayesianNetwork.SetTestImages(testImages);
@@ -71,7 +70,7 @@ int main(int argc, char* argv[]) {
     outputFile.open("../output/network.txt");
     if (outputFile.is_open())
     {
-        for (int digit = 0; digit < numLabels; ++digit)
+        for (int digit = 0; digit < possibleDigits; ++digit)
         {
             for (int pixel = 0; pixel < numFeatures; ++pixel)
             {
@@ -79,7 +78,7 @@ int main(int argc, char* argv[]) {
             }
         }
         // final 10 lines
-        for (int digit = 0; digit < numLabels; ++digit)
+        for (int digit = 0; digit < possibleDigits; ++digit)
         {
             outputFile << digitVector[digit].mProb << std::endl;
         }
@@ -91,9 +90,9 @@ int main(int argc, char* argv[]) {
     outputClassification.open("../output/classification-summary.txt");
     if (outputClassification.is_open())
     {
-        for (int i = 0; i < numLabels; ++i)
+        for (int i = 0; i < possibleDigits; ++i)
         {
-            for (int j = 0; j < numLabels; ++j)
+            for (int j = 0; j < possibleDigits; ++j)
             {
                 outputClassification << std::setw(5) << digitVector[i].mPredictionVector[j];
             }
